@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Подсказки для поступления на службу</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--tx:#1b2430;--mut:#667085;--ac:#1f4e8c;--acx:#fff;--bd:#dfe3ea}
+@media (prefers-color-scheme:dark){:root{--bg:#12161c;--card:#1b222b;--tx:#e8ecf2;--mut:#9aa6b6;--ac:#6ea3e8;--acx:#0d1520;--bd:#2c3644}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.w{max-width:860px;margin:0 auto;padding:20px 16px 48px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px}
+h1{font-size:1.6rem;margin:8px 0 4px}
+.sub{color:var(--mut)}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 18px}
+.tab{border:1px solid var(--bd);background:var(--card);color:var(--tx);padding:8px 14px;border-radius:999px;cursor:pointer;font:inherit}
+.tab.on{background:var(--ac);color:var(--acx);border-color:var(--ac)}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px 16px;margin-bottom:12px;display:flex;gap:12px;align-items:center;justify-content:space-between}
+.card h3{margin:0 0 2px;font-size:1.05rem}
+.card p{margin:0;color:var(--mut);font-size:.92rem;white-space:pre-wrap}
+.tag{display:inline-block;font-size:.75rem;font-weight:600;color:var(--ac);border:1px solid var(--ac);border-radius:6px;padding:0 6px;margin-bottom:4px}
+.cnt{color:var(--mut);font-size:.8rem;margin-top:4px}
+.b{background:var(--ac);color:var(--acx);border:0;border-radius:8px;padding:9px 14px;font:inherit;cursor:pointer;white-space:nowrap;text-decoration:none;display:inline-block;text-align:center}
+.b.d{background:none;color:var(--mut);border:1px solid var(--bd)}
+.row{display:flex;gap:8px;flex-direction:column}
+.box{display:none;background:var(--card);border:1px dashed var(--ac);border-radius:12px;padding:16px;margin:14px 0}
+.box.on{display:block}
+.box h2{margin:0 0 10px;font-size:1.05rem}
+input,select,textarea{width:100%;margin-bottom:10px;padding:9px 10px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--tx);font:inherit}
+.msg{color:var(--mut);text-align:center;padding:28px 0}
+@media(max-width:520px){.card{flex-direction:column;align-items:stretch}}
+</style>
+</head>
+<body>
+<div class="w">
+  <div class="top"><h1>Подсказки для поступления на службу</h1><button class="b" id="loginBtn">Войти</button></div>
+  <p class="sub">Материалы для подготовки: выберите организацию и скачайте нужный файл.</p>
+
+  <div class="box" id="login">
+    <h2>Вход для публикаций</h2>
+    <input id="lg" placeholder="Логин" autocomplete="username">
+    <input id="pw" type="password" placeholder="Пароль" autocomplete="current-password">
+    <button class="b" id="pwb">Войти</button> <span class="sub" id="pws"></span>
+  </div>
+
+  <div class="box" id="adm">
+    <h2>Добавить материал</h2>
+    <select id="org"></select>
+    <input id="ttl" placeholder="Название">
+    <textarea id="dsc" rows="3" placeholder="Описание (необязательно)"></textarea>
+    <input id="file" type="file">
+    <button class="b" id="add">Загрузить и опубликовать</button> <span class="sub" id="st"></span>
+  </div>
+
+  <input id="q" type="search" placeholder="Поиск по названию и описанию">
+  <div class="tabs" id="tabs"></div>
+  <div id="list"><div class="msg">Загрузка…</div></div>
+</div>
+<script>
+const ORGS=["ФСБ","ФСИН","ППС","ГАИ","ЕСС"];
+let cur="Все",q="",items=[],me={},showLogin=false;
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const api=async(url,opt)=>{const r=await fetch(url,opt);const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||"Ошибка");return j};
+
+function tabs(){
+  $("tabs").innerHTML=["Все",...ORGS].map(o=>`<button class="tab ${o===cur?"on":""}" data-o="${o}">${o}</button>`).join("");
+  $("tabs").querySelectorAll(".tab").forEach(b=>b.onclick=()=>{cur=b.dataset.o;tabs();render()});
+}
+function panels(){
+  $("login").classList.toggle("on",showLogin&&!me.user);
+  $("adm").classList.toggle("on",!!me.user);
+  $("loginBtn").textContent=me.user?"Выйти":"Войти";
+}
+function render(){
+  const k=q.trim().toLowerCase();
+  const l=items.filter(i=>(cur==="Все"||i.org===cur)&&(!k||(i.title+" "+i.desc).toLowerCase().includes(k)));
+  if(!l.length){$("list").innerHTML='<div class="msg">Ничего не найдено.</div>';return}
+  $("list").innerHTML=l.map(i=>`<div class="card"><div><span class="tag">${esc(i.org)}</span><h3>${esc(i.title)}</h3>${i.desc?`<p>${esc(i.desc)}</p>`:""}<div class="cnt">Скачано: ${i.downloads}</div></div>
+  <div class="row"><a class="b" href="/download/${i.id}" onclick="setTimeout(load,1500)">Скачать</a>${me.role==="owner"?`<button class="b d" data-del="${i.id}">Удалить</button>`:""}</div></div>`).join("");
+  $("list").querySelectorAll("[data-del]").forEach(b=>b.onclick=async()=>{
+    if(!confirm("Удалить материал?"))return;
+    try{await api("/api/items/"+b.dataset.del,{method:"DELETE"});load()}catch(e){alert(e.message)}
+  });
+}
+async function load(){try{items=await api("/api/items");render()}catch(e){$("list").innerHTML='<div class="msg">Не удалось загрузить список.</div>'}}
+$("loginBtn").onclick=async()=>{
+  if(me.user){await api("/api/logout",{method:"POST"});me={};panels();render()}
+  else{showLogin=!showLogin;panels()}
+};
+async function login(){
+  try{
+    me=await api("/api/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({login:$("lg").value,password:$("pw").value})});
+    $("pw").value="";$("pws").textContent="";panels();render();
+  }catch(e){$("pws").textContent=e.message}
+}
+$("pwb").onclick=login;
+$("pw").onkeydown=e=>{if(e.key==="Enter")login()};
+$("add").onclick=async()=>{
+  const f=$("file").files[0],t=$("ttl").value.trim();
+  if(!t||!f){$("st").textContent="Укажите название и выберите файл.";return}
+  const fd=new FormData();fd.append("org",$("org").value);fd.append("title",t);fd.append("desc",$("dsc").value);fd.append("file",f);
+  $("st").textContent="Загрузка…";$("add").disabled=true;
+  try{await api("/api/items",{method:"POST",body:fd});$("ttl").value="";$("dsc").value="";$("file").value="";$("st").textContent="Готово.";load()}
+  catch(e){$("st").textContent=e.message}
+  $("add").disabled=false;
+};
+$("q").oninput=e=>{q=e.target.value;render()};
+$("org").innerHTML=ORGS.map(o=>`<option>${o}</option>`).join("");
+tabs();
+api("/api/me").then(m=>{me=m;panels();render()}).catch(()=>{});
+load();
+</script>
+</body>
+</html>
